@@ -25,8 +25,17 @@ const menuData = [
 let cart = {};
 let currentCat = 'all';
 
-function renderMenu() {
-  const list = currentCat === 'all' ? menuData : menuData.filter(i => i.cat === currentCat);
+// ✨ NEW: DYNAMIC THEME TOGGLE LOGIC
+function toggleTheme() {
+  const html = document.documentElement;
+  const currentTheme = html.getAttribute('data-theme');
+  const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+  html.setAttribute('data-theme', newTheme);
+  document.getElementById('theme-icon').textContent = newTheme === 'light' ? '🌙' : '☀️';
+}
+
+function renderMenu(listToRender = null) {
+  const list = listToRender || (currentCat === 'all' ? menuData : menuData.filter(i => i.cat === currentCat));
   document.getElementById('menu-grid').innerHTML = list.map(item => `
     <div class="dish-card">
       <div class="dish-img-wrap">
@@ -44,7 +53,7 @@ function renderMenu() {
         <div class="dish-desc">${item.desc}</div>
         <div class="dish-footer">
           <span class="dish-price">$${item.price}.00</span>
-          <button class="add-btn ${cart[item.id]?'in-cart':''}" onclick="addItem(${item.id})" aria-label="Add ${item.name}">
+          <button class="add-btn ${cart[item.id]?'in-cart':''}" onclick="addItem(${item.id})">
             ${cart[item.id] ? cart[item.id] : '+'}
           </button>
         </div>
@@ -55,9 +64,29 @@ function renderMenu() {
 
 function filterMenu(cat, btn) {
   currentCat = cat;
+  document.getElementById('menu-search').value = ""; 
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderMenu();
+}
+
+function searchMenu() {
+  const query = document.getElementById('menu-search').value.toLowerCase();
+  if(query !== "") {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab')[0].classList.add('active'); 
+  }
+  const filteredList = menuData.filter(item => 
+    item.name.toLowerCase().includes(query) || item.desc.toLowerCase().includes(query)
+  );
+  const grid = document.getElementById('menu-grid');
+  if(filteredList.length === 0) {
+    grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+      ❌ No dishes found matching "${document.getElementById('menu-search').value}".
+    </div>`;
+    return;
+  }
+  renderMenu(filteredList);
 }
 
 function addItem(id) {
@@ -112,16 +141,38 @@ function toggleCart() {
   document.getElementById('order-sidebar').classList.toggle('open');
 }
 
+// ✨ UPDATED: CHECKOUT CONVERTS TO DIGITAL INVOICE MODAL
 function checkout() {
   const keys = Object.keys(cart);
   if (!keys.length) return;
-  const total = keys.reduce((s, id) => s + menuData.find(m=>m.id==id).price * cart[id], 0);
-  const summary = keys.map(id => `${cart[id]}× ${menuData.find(m=>m.id==id).name}`).join(', ');
-  alert(`✅ Order placed!\n\n${summary}\n\nTotal: $${total.toFixed(2)}\n\nThank you! Your order will be ready in ~30 minutes.`);
+
+  const subtotal = keys.reduce((s, id) => s + menuData.find(m=>m.id==id).price * cart[id], 0);
+  const tax = subtotal * 0.05;
+  const grandTotal = subtotal + tax;
+
+  // Build the list rows inside the receipt
+  document.getElementById('invoice-items-list').innerHTML = keys.map(id => {
+    const item = menuData.find(m => m.id == id);
+    return `<div class="invoice-row">
+      <span>${cart[id]}x ${item.name}</span>
+      <span>$${(item.price * cart[id]).toFixed(2)}</span>
+    </div>`;
+  }).join('');
+
+  document.getElementById('inv-subtotal').textContent = `$${subtotal.toFixed(2)}`;
+  document.getElementById('inv-tax').textContent = `$${tax.toFixed(2)}`;
+  document.getElementById('inv-total').textContent = `$${grandTotal.toFixed(2)}`;
+
+  // Open the receipt modal smoothly
+  toggleCart(); // Close the sidebar first
+  document.getElementById('invoiceModal').classList.add('active');
+}
+
+function closeInvoice() {
+  document.getElementById('invoiceModal').classList.remove('active');
   cart = {};
   updateCart();
   renderMenu();
-  toggleCart();
 }
 
 function showToast(msg) {
@@ -131,5 +182,4 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// Initial Render
 renderMenu();
